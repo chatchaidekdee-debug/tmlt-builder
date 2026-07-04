@@ -1,0 +1,1588 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TMLT to Lab Catalog Builder & Editor</title>
+    <meta name="description" content="เครื่องมือสำหรับแปลงไฟล์ TMLT Mapping เป็นไฟล์โครงสร้าง Lab Catalog และแก้ไขข้อมูลให้ครบถ้วนก่อนส่งเบิก">
+    
+    <!-- PWA Settings -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#14b8a6">
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(reg => console.log('Service Worker Registered!'))
+                    .catch(err => console.error('Service Worker Registration Failed:', err));
+            });
+        }
+    </script>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- SheetJS for Excel processing (Local Offline Version) -->
+    <script src="xlsx.full.min.js"></script>
+
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: rgba(17, 24, 39, 0.7);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --text-primary: #f3f4f6;
+            --text-secondary: #9ca3af;
+            --primary: #14b8a6;
+            --primary-glow: rgba(20, 184, 166, 0.15);
+            --secondary: #3b82f6;
+            --accent: #8b5cf6;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --card-blur: blur(16px);
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', 'Sarabun', -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.5;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(20, 184, 166, 0.05) 0px, transparent 50%),
+                radial-gradient(at 100% 0%, rgba(59, 130, 246, 0.05) 0px, transparent 50%),
+                radial-gradient(at 50% 100%, rgba(139, 92, 246, 0.03) 0px, transparent 50%);
+            background-attachment: fixed;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* Header Styling */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2.5rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 1.5rem;
+        }
+
+        .brand-section h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .brand-section p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-top: 0.25rem;
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            padding: 0.5rem 1rem;
+            border-radius: 9999px;
+            font-size: 0.85rem;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background-color: var(--success);
+            border-radius: 50%;
+            box-shadow: 0 0 8px var(--success);
+        }
+
+        /* Stat Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2.5rem;
+        }
+
+        .stat-card {
+            background: var(--card-bg);
+            backdrop-filter: var(--card-blur);
+            border: 1px solid var(--border-color);
+            padding: 1.5rem;
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition: var(--transition);
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(20, 184, 166, 0.3);
+            box-shadow: 0 10px 20px -10px rgba(0, 0, 0, 0.5);
+        }
+
+        .stat-card .label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-top: 0.5rem;
+            display: flex;
+            align-items: baseline;
+            gap: 0.5rem;
+        }
+
+        .stat-card .desc {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 0.5rem;
+        }
+
+        .stat-card.primary-theme .value { color: var(--primary); }
+        .stat-card.success-theme .value { color: var(--success); }
+        .stat-card.warning-theme .value { color: var(--warning); }
+        .stat-card.danger-theme .value { color: var(--danger); }
+
+        /* Main Workspace */
+        .workspace {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+        }
+
+        /* Upload Box */
+        .upload-section {
+            background: var(--card-bg);
+            backdrop-filter: var(--card-blur);
+            border: 2px dashed var(--border-color);
+            border-radius: 20px;
+            padding: 3rem 2rem;
+            text-align: center;
+            transition: var(--transition);
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upload-section.dragover {
+            border-color: var(--primary);
+            background: rgba(20, 184, 166, 0.05);
+            box-shadow: 0 0 20px var(--primary-glow);
+        }
+
+        .upload-icon {
+            font-size: 3rem;
+            color: var(--primary);
+            margin-bottom: 1.5rem;
+            display: inline-block;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .upload-btn {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            border: none;
+            padding: 0.75rem 2rem;
+            font-size: 1rem;
+            font-weight: 600;
+            border-radius: 12px;
+            cursor: pointer;
+            margin-top: 1rem;
+            box-shadow: 0 4px 12px rgba(20, 184, 166, 0.3);
+            transition: var(--transition);
+        }
+
+        .upload-btn:hover {
+            transform: scale(1.02);
+            box-shadow: 0 6px 16px rgba(20, 184, 166, 0.5);
+        }
+
+        .file-input {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        /* Control Panel */
+        .control-panel {
+            background: var(--card-bg);
+            backdrop-filter: var(--card-blur);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .panel-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.75rem;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+            align-items: end;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .form-group label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .form-control {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 0.6rem 0.8rem;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 0.9rem;
+            transition: var(--transition);
+            width: 100%;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--primary);
+            background: rgba(255, 255, 255, 0.08);
+            box-shadow: 0 0 0 3px var(--primary-glow);
+        }
+
+        .btn {
+            padding: 0.6rem 1.2rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: var(--bg-color);
+        }
+
+        .btn-primary:hover {
+            background: #0d9488;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: var(--border-color);
+            color: var(--text-primary);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        /* Data Section */
+        .data-section {
+            background: var(--card-bg);
+            backdrop-filter: var(--card-blur);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 1.5rem;
+            display: none;
+            flex-direction: column;
+            gap: 1.5rem;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4);
+        }
+
+        .data-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .search-box {
+            position: relative;
+            max-width: 320px;
+            width: 100%;
+        }
+
+        .action-group {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        /* Responsive Table styling */
+        .table-container {
+            overflow-x: auto;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            max-height: 600px;
+            position: relative;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 0.85rem;
+        }
+
+        th {
+            background: #111827;
+            padding: 0.75rem 1rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            white-space: nowrap;
+        }
+
+        th::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: 100%;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        td {
+            padding: 0.5rem 1rem;
+            border-bottom: 1px solid var(--border-color);
+            white-space: nowrap;
+        }
+
+        tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        tr.has-error td {
+            background: rgba(239, 68, 68, 0.05);
+        }
+
+        .cell-input {
+            background: transparent;
+            border: 1px solid transparent;
+            color: var(--text-primary);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: inherit;
+            width: 100%;
+            transition: var(--transition);
+        }
+
+        .cell-input:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .cell-input:focus {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: var(--primary);
+            outline: none;
+            box-shadow: 0 0 0 2px var(--primary-glow);
+        }
+
+        .cell-input.invalid {
+            border-color: rgba(239, 68, 68, 0.5);
+            background: rgba(239, 68, 68, 0.1);
+        }
+
+        /* Checkbox styling */
+        .chk-col {
+            width: 40px;
+            text-align: center;
+        }
+
+        .custom-checkbox {
+            width: 16px;
+            height: 16px;
+            accent-color: var(--primary);
+            cursor: pointer;
+        }
+
+        /* Pagination */
+        .pagination-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .pagination-info {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        .pagination-controls {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .page-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 0.4rem 0.8rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: var(--transition);
+        }
+
+        .page-btn:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--text-secondary);
+        }
+
+        .page-btn.active {
+            background: var(--primary);
+            color: var(--bg-color);
+            font-weight: 600;
+            border-color: var(--primary);
+        }
+
+        .page-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        /* Notification Modal */
+        .toast {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: #1f2937;
+            border-left: 4px solid var(--primary);
+            color: var(--text-primary);
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            gap: 0.75rem;
+            z-index: 100;
+            animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .toast.success { border-left-color: var(--success); }
+        .toast.error { border-left-color: var(--danger); }
+        .toast.warning { border-left-color: var(--warning); }
+
+        /* Guide & Footer */
+        .guide-section {
+            margin-top: 3rem;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 2rem;
+        }
+
+        .guide-section h2 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--primary);
+        }
+
+        .guide-list {
+            padding-left: 1.5rem;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .guide-list li {
+            margin-bottom: 0.5rem;
+        }
+
+        footer {
+            text-align: center;
+            padding: 2rem 0;
+            margin-top: 4rem;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            border-top: 1px solid var(--border-color);
+        }
+
+        /* Badges inside table */
+        .badge {
+            display: inline-block;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge-danger {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--danger);
+        }
+
+        .badge-success {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--success);
+        }
+
+        /* Overlay loader */
+        .loader-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(11, 15, 25, 0.8);
+            backdrop-filter: blur(4px);
+            z-index: 999;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid rgba(20, 184, 166, 0.1);
+            border-radius: 50%;
+            border-top-color: var(--primary);
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <div class="brand-section">
+                <h1>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--primary);"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+                    TMLT to Lab Catalog Builder
+                </h1>
+                <p>โปรแกรมนำเข้าไฟล์ TMLT Mapping จากเว็บ สมสท. และแปลงโครงสร้างเป็นไฟล์ Lab Catalog เพื่อส่งกรมบัญชีกลาง/สปสช.</p>
+            </div>
+            <div class="status-badge">
+                <span class="status-dot"></span>
+                <span>พร้อมใช้งานระบบ Offline</span>
+            </div>
+        </header>
+
+        <!-- Stats Counter -->
+        <div class="stats-grid">
+            <div class="stat-card primary-theme">
+                <div>
+                    <span class="label">รายการทั้งหมด</span>
+                    <div class="value" id="stat-total">0</div>
+                </div>
+                <span class="desc">จำนวนรายการยา/แล็บทั้งหมดในระบบ</span>
+            </div>
+            <div class="stat-card success-theme">
+                <div>
+                    <span class="label">ข้อมูลสมบูรณ์</span>
+                    <div class="value" id="stat-valid">0</div>
+                </div>
+                <span class="desc">รายการที่ระบุราคาและฟิลด์จำเป็นครบถ้วน</span>
+            </div>
+            <div class="stat-card danger-theme">
+                <div>
+                    <span class="label">ข้อมูลไม่สมบูรณ์</span>
+                    <div class="value" id="stat-invalid">0</div>
+                </div>
+                <span class="desc">รายการที่ต้องเติมข้อมูลจำเป็นเพิ่มเติม</span>
+            </div>
+        </div>
+
+        <!-- Main Workspace -->
+        <div class="workspace">
+            
+            <!-- Upload Box -->
+            <div class="upload-section" id="drop-zone">
+                <span class="upload-icon">📂</span>
+                <h2>ลากและวางไฟล์ TMLT Excel ที่นี่</h2>
+                <p style="color: var(--text-secondary); margin-top: 0.5rem;">หรือคลิกเพื่อค้นหาและเลือกไฟล์จากคอมพิวเตอร์ของคุณ (.xlsx, .xls)</p>
+                <button class="upload-btn">เลือกไฟล์</button>
+                <input type="file" id="file-picker" class="file-input" accept=".xlsx, .xls">
+            </div>
+
+            <!-- Editor Work Area (Hidden until file loaded) -->
+            <div class="data-section" id="data-section">
+                
+                <!-- Batch Auto-fill Tools -->
+                <div class="control-panel">
+                    <div class="panel-title">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                        เครื่องมือเติมข้อมูลกลุ่ม (Batch Auto-Fill)
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group" style="grid-column: span 2;">
+                            <label for="batch-benefit">สิทธิประโยชน์ (BenefitPlan) *เลือกได้หลายสิทธิ์</label>
+                            <input type="text" id="batch-benefit" class="form-control" placeholder="เช่น CS,SS,UC" value="CS,SS,UC">
+                            <div style="display: flex; gap: 1rem; align-items: center; margin-top: 0.25rem;">
+                                <label style="display: flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; color: var(--text-secondary); cursor: pointer;">
+                                    <input type="checkbox" class="benefit-quick-chk" value="CS" checked style="accent-color: var(--primary);"> CS (ข้าราชการ)
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; color: var(--text-secondary); cursor: pointer;">
+                                    <input type="checkbox" class="benefit-quick-chk" value="SS" checked style="accent-color: var(--primary);"> SS (ประกันสังคม)
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; color: var(--text-secondary); cursor: pointer;">
+                                    <input type="checkbox" class="benefit-quick-chk" value="UC" checked style="accent-color: var(--primary);"> UC (บัตรทอง)
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="batch-billgroup">กลุ่มการเบิกจ่าย (BillGroup)</label>
+                            <input type="text" id="batch-billgroup" class="form-control" placeholder="เช่น 07" value="07">
+                        </div>
+                        <div class="form-group">
+                            <label for="batch-sflag">สถานะ (SFlag)</label>
+                            <input type="text" id="batch-sflag" class="form-control" placeholder="เช่น R" value="R">
+                        </div>
+                        <div class="form-group">
+                            <label for="batch-chargecat">หมวดค่าใช้จ่าย (ChargeCat)</label>
+                            <input type="text" id="batch-chargecat" class="form-control" placeholder="เช่น R" value="R">
+                        </div>
+                        <div class="form-group">
+                            <label for="batch-updateflag">เครื่องหมายปรับปรุง (UpdateFlag)</label>
+                            <input type="text" id="batch-updateflag" class="form-control" placeholder="เช่น A" value="A">
+                        </div>
+                        <div class="form-group">
+                            <label for="batch-updatebeg">วันที่เริ่มมีผล (UpdateBeg)</label>
+                            <input type="text" id="batch-updatebeg" class="form-control" placeholder="YYYY-MM-DDTHH:mm:ss" value="2020-01-01T00:00:00">
+                        </div>
+                        <div class="form-group">
+                            <label for="batch-updateend">วันสิ้นสุดผล (UpdateEnd)</label>
+                            <input type="text" id="batch-updateend" class="form-control" placeholder="YYYY-MM-DDTHH:mm:ss" value="9999-12-31T23:59:59">
+                        </div>
+                        <div class="form-group">
+                            <label for="batch-rpdatebeg">วันที่สิทธิ์เริ่มมีผล (RPDateBeg)</label>
+                            <input type="text" id="batch-rpdatebeg" class="form-control" placeholder="YYYY-MM-DDTHH:mm:ss" value="2018-01-01T00:00:00">
+                        </div>
+                        <div class="form-group">
+                            <label for="batch-rpdateend">วันที่สิทธิ์สิ้นสุด (RPDateEnd)</label>
+                            <input type="text" id="batch-rpdateend" class="form-control" placeholder="YYYY-MM-DDTHH:mm:ss" value="9999-12-31T23:59:59">
+                        </div>
+                        <div class="form-group">
+                            <button type="button" class="btn btn-primary" id="btn-apply-batch" style="width: 100%;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                นำไปใช้กับแถวที่เลือก
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Table Header Actions -->
+                <div class="data-header">
+                    <div class="search-box">
+                        <input type="text" id="table-search" class="form-control" placeholder="🔍 ค้นหาด้วยรหัสแล็บ, TMLT หรือชื่อ...">
+                    </div>
+                    
+                    <div class="action-group" style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+                        <div style="display: flex; gap: 0.5rem; align-items: center; background: rgba(255,255,255,0.05); padding: 0.4rem 0.8rem; border-radius: 8px; border: 1px solid var(--border-color);">
+                            <span style="font-size: 0.8rem; color: var(--text-secondary);">รหัส รพ.:</span>
+                            <input type="text" id="export-hcode" class="form-control" style="width: 75px; padding: 0.25rem 0.5rem; font-size: 0.85rem; height: auto;" value="10956" placeholder="10956">
+                            <span style="font-size: 0.8rem; color: var(--text-secondary);">ลำดับส่ง:</span>
+                            <input type="text" id="export-seq" class="form-control" style="width: 65px; padding: 0.25rem 0.5rem; font-size: 0.85rem; height: auto;" value="0070" placeholder="0070">
+                        </div>
+                        <button class="btn btn-secondary" id="btn-show-all">ทั้งหมด</button>
+                        <button class="btn btn-secondary" id="btn-show-errors" style="border-color: rgba(239, 68, 68, 0.3); color: var(--danger);">
+                            <span class="status-dot" style="background-color: var(--danger); box-shadow: 0 0 8px var(--danger);"></span>
+                            แสดงเฉพาะจุดผิดพลาด
+                        </button>
+                        <button class="btn btn-secondary" id="btn-add-row">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                            เพิ่มแถวใหม่
+                        </button>
+                        <button class="btn btn-success" id="btn-export">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"></path></svg>
+                            ส่งออก Lab Catalog (.xls)
+                        </button>
+                        <button class="btn btn-danger" id="btn-clear-all">ล้างข้อมูล</button>
+                    </div>
+                </div>
+
+                <!-- Spreadsheet Grid -->
+                <div class="table-container">
+                    <table id="catalog-table">
+                        <thead>
+                            <tr>
+                                <th class="chk-col"><input type="checkbox" id="select-all-rows" class="custom-checkbox"></th>
+                                <th style="min-width: 100px;">LCCode *</th>
+                                <th style="min-width: 100px;">BillGroup *</th>
+                                <th style="min-width: 100px;">CsCode</th>
+                                <th style="min-width: 100px;">TMLT *</th>
+                                <th style="min-width: 100px;">LOINC</th>
+                                <th style="min-width: 120px;">Panel</th>
+                                <th style="min-width: 250px;">Name *</th>
+                                <th style="min-width: 80px;">SFlag *</th>
+                                <th style="min-width: 90px;">ChargeCat *</th>
+                                <th style="min-width: 100px;">UnitPrice *</th>
+                                <th style="min-width: 130px;">BenefitPlan *</th>
+                                <th style="min-width: 100px;">ReimbPrice</th>
+                                <th style="min-width: 120px;">UpdateFlag *</th>
+                                <th style="min-width: 180px;">UPDateBeg *</th>
+                                <th style="min-width: 180px;">UPDateEnd *</th>
+                                <th style="min-width: 180px;">RPDateBeg *</th>
+                                <th style="min-width: 180px;">RPDateEnd *</th>
+                                <th style="min-width: 180px;">DateUpd *</th>
+                                <th style="width: 50px;">จัดการ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="catalog-tbody">
+                            <!-- Rows will be dynamically rendered here -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination & Controls -->
+                <div class="pagination-container">
+                    <div class="pagination-info" id="pagination-info">
+                        แสดงรายการ 0 - 0 จากทั้งหมด 0 รายการ
+                    </div>
+                    <div class="pagination-controls" id="pagination-controls">
+                        <!-- Buttons will be dynamically generated here -->
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- Help Guide -->
+        <div class="guide-section">
+            <h2>💡 คู่มือการจัดเตรียมไฟล์ Lab Catalog</h2>
+            <ul class="guide-list">
+                <li><strong>ไฟล์นำเข้า TMLT Mapping:</strong> โปรแกรมนี้ออกแบบมารองรับการโหลดไฟล์ Excel ที่ส่งออกจากระบบ <code>tmlt-mapping.this.or.th</code> โดยอัตโนมัติ ซึ่งจะมีหัวคอลัมน์มาตรฐาน เช่น <code>LCCode</code>, <code>TMLT</code>, <code>LOINC</code>, และ <code>LCName</code></li>
+                <li><strong>โครงสร้าง Lab Catalog (สปสช./สกส.):</strong> โครงสร้างมาตรฐานมีทั้งหมด 14 ฟิลด์หลัก ฟิลด์ที่มีเครื่องหมายดอกจัน <code>*</code> ถือเป็นข้อมูลที่จำเป็นต้องกรอก หากเว้นว่างไว้อาจจะส่งตรวจข้อมูลหรือเบิกจ่ายไม่ผ่าน</li>
+                <li><strong>เครื่องมือเติมข้อมูลกลุ่ม (Batch Auto-Fill):</strong> แนะนำให้ใช้เมื่อต้องการเติมค่าเริ่มต้นแบบเดียวกันทั้งหมด เช่น ตั้งค่าสถานะ <code>SFlag = A</code>, ตั้งค่าสิทธิประโยชน์ <code>BenefitPlan = CS</code> และวันที่เริ่มมีผล <code>DateBeg</code> เป็นวันที่เริ่มต้นการส่งข้อมูล</li>
+                <li><strong>รหัสกรมบัญชีกลาง (CsCode):</strong> ในส่วนของสิทธิสวัสดิการข้าราชการ หากรายการแล็บใดจับคู่กับรหัสของกรมบัญชีกลางได้ ให้ใส่ในช่อง <code>CsCode</code> และใส่ราคาจำกัดเพดานการเบิกในช่อง <code>ReimbPrice</code></li>
+                <li><strong>การนำข้อมูลไปใช้:</strong> เมื่อแก้ไขและตรวจดูแถวที่ติดคอลัมน์สีแดงจนครบถ้วนแล้ว ให้กดปุ่ม <strong>"ส่งออกไฟล์ Lab Catalog (.xlsx)"</strong> เพื่อนำส่งระบบหรือส่งอีเมลไปยังผู้ควบคุมระบบเบิกจ่ายหลัก</li>
+            </ul>
+        </div>
+
+        <!-- Footer -->
+        <footer>
+            <p>TMLT to Lab Catalog Builder & Editor © 2026 | พัฒนาขึ้นสำหรับการใช้สนับสนุนงานบริการสุขภาพในประเทศไทย</p>
+        </footer>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast">
+        <span id="toast-icon">✨</span>
+        <span id="toast-message">ข้อความแจ้งเตือน</span>
+    </div>
+
+    <!-- Loader Overlay -->
+    <div class="loader-overlay" id="loader">
+        <div class="spinner"></div>
+        <p style="color: var(--primary); font-weight: 500;" id="loader-text">กำลังประมวลผลไฟล์ Excel...</p>
+    </div>
+
+    <script>
+        // Data Store
+        let catalogData = [];
+        let filteredData = [];
+        let selectedRowIds = new Set();
+        
+        // Pagination Settings
+        let currentPage = 1;
+        const rowsPerPage = 50;
+        let showOnlyErrors = false;
+        let searchQuery = "";
+
+        // Elements
+        const dropZone = document.getElementById('drop-zone');
+        const filePicker = document.getElementById('file-picker');
+        const dataSection = document.getElementById('data-section');
+        const catalogTbody = document.getElementById('catalog-tbody');
+        const selectAllRows = document.getElementById('select-all-rows');
+        const loader = document.getElementById('loader');
+        const loaderText = document.getElementById('loader-text');
+        
+        function getCurrentDateTimeString() {
+            const d = new Date();
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            const hh = String(d.getHours()).padStart(2, '0');
+            const min = String(d.getMinutes()).padStart(2, '0');
+            const ss = String(d.getSeconds()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}T${hh}:${min}:${ss}`;
+        }
+
+        // Set Default DateBeg to Today
+        document.addEventListener('DOMContentLoaded', () => {
+            // Listen to benefit plan checkboxes in batch auto-fill
+            const chks = document.querySelectorAll('.benefit-quick-chk');
+            const benefitInput = document.getElementById('batch-benefit');
+            chks.forEach(chk => {
+                chk.addEventListener('change', () => {
+                    const selected = Array.from(chks)
+                        .filter(c => c.checked)
+                        .map(c => c.value);
+                    benefitInput.value = selected.join(',');
+                });
+            });
+        });
+
+        // Toast Notification Function
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const toastIcon = document.getElementById('toast-icon');
+            const toastMsg = document.getElementById('toast-message');
+            
+            toast.className = `toast ${type}`;
+            
+            if (type === 'success') {
+                toastIcon.textContent = '✅';
+            } else if (type === 'error') {
+                toastIcon.textContent = '❌';
+            } else if (type === 'warning') {
+                toastIcon.textContent = '⚠️';
+            }
+            
+            toastMsg.textContent = message;
+            toast.style.display = 'flex';
+            
+            setTimeout(() => {
+                toast.style.display = 'none';
+            }, 3000);
+        }
+
+        // Drag and drop events
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        dropZone.addEventListener('click', () => {
+            filePicker.click();
+        });
+
+        filePicker.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        // Show/Hide Loading Spinner
+        function toggleLoader(show, text = "กำลังประมวลผล...") {
+            loaderText.textContent = text;
+            loader.style.display = show ? 'flex' : 'none';
+        }
+
+        // Parse Excel File
+        function handleFile(file) {
+            if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
+                showToast('กรุณาอัปโหลดไฟล์ Excel (.xlsx หรือ .xls) เท่านั้น', 'error');
+                return;
+            }
+
+            toggleLoader(true, "กำลังอ่านข้อมูลจากไฟล์ Excel...");
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+                    if (jsonData.length === 0) {
+                        throw new Error('ไม่พบข้อมูลในชีตแรกของไฟล์ Excel');
+                    }
+
+                    processImportedData(jsonData);
+                    showToast(`นำเข้าข้อมูลเสร็จสิ้น จำนวน ${catalogData.length} รายการ`, 'success');
+                } catch (error) {
+                    console.error(error);
+                    showToast(`เกิดข้อผิดพลาดในการอ่านไฟล์: ${error.message}`, 'error');
+                } finally {
+                    toggleLoader(false);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // Process data to fit Lab Catalog schema
+        function processImportedData(rows) {
+            // Find key column mapping
+            // Excel from TMLT mapping typically has: LCCode, LCName, TMLT, LOINC, Specimen, Method, Status etc.
+            // Standard Lab Catalog schema: 
+            // LCCode, TMLT, LOINC, Panel, Name, SFlag, ChargeCat, UnitPrice, BenefitPlan, BillGroup, CsCode, ReimbPrice, UpdateFlag, UpdateBeg, UpdateEnd, RPDateBeg, DateUpd
+            
+            catalogData = rows.map((row, index) => {
+                // Find LCCode (case-insensitive search)
+                const lcCodeKey = Object.keys(row).find(k => k.toLowerCase() === 'lccode' || k.toLowerCase() === 'code');
+                const tmltKey = Object.keys(row).find(k => k.toLowerCase() === 'tmlt');
+                const loincKey = Object.keys(row).find(k => k.toLowerCase() === 'loinc');
+                const nameKey = Object.keys(row).find(k => k.toLowerCase() === 'name' || k.toLowerCase() === 'lcname' || k.toLowerCase() === 'name_th');
+                
+                // Existing catalog elements if they are present in file
+                const sFlagKey = Object.keys(row).find(k => k.toLowerCase() === 'sflag' || k.toLowerCase() === 'status_flag');
+                const chargeCatKey = Object.keys(row).find(k => k.toLowerCase() === 'chargecat');
+                const unitPriceKey = Object.keys(row).find(k => k.toLowerCase() === 'unitprice' || k.toLowerCase() === 'price');
+                const benefitPlanKey = Object.keys(row).find(k => k.toLowerCase() === 'benefitplan' || k.toLowerCase() === 'benefit');
+                const billGroupKey = Object.keys(row).find(k => k.toLowerCase() === 'billgroup');
+                const csCodeKey = Object.keys(row).find(k => k.toLowerCase() === 'cscode');
+                const reimbPriceKey = Object.keys(row).find(k => k.toLowerCase() === 'reimbprice');
+                const updateFlagKey = Object.keys(row).find(k => k.toLowerCase() === 'updateflag');
+                const updateBegKey = Object.keys(row).find(k => k.toLowerCase() === 'updatebeg');
+                const updateEndKey = Object.keys(row).find(k => k.toLowerCase() === 'updateend');
+                const rpDateBegKey = Object.keys(row).find(k => k.toLowerCase() === 'rpdatebeg');
+                const rpDateEndKey = Object.keys(row).find(k => k.toLowerCase() === 'rpdateend');
+                const dateUpdKey = Object.keys(row).find(k => k.toLowerCase() === 'dateupd');
+                const panelKey = Object.keys(row).find(k => k.toLowerCase() === 'panel');
+
+                const reimbVal = row[reimbPriceKey] !== undefined ? String(row[reimbPriceKey]).trim() : "";
+                const unitVal = row[unitPriceKey] !== undefined ? String(row[unitPriceKey]).trim() : "";
+                // Fallback to reimbPrice if unitPrice is empty
+                const finalUnitPrice = unitVal !== "" ? unitVal : reimbVal;
+
+                return {
+                    id: index + 1,
+                    LCCode: String(row[lcCodeKey] || '').trim(),
+                    TMLT: String(row[tmltKey] || '').trim(),
+                    LOINC: String(row[loincKey] || '').trim(),
+                    Panel: String(row[panelKey] || '').trim(),
+                    Name: String(row[nameKey] || '').trim(),
+                    SFlag: String(row[sFlagKey] || 'R').trim(), // Default 'R'
+                    ChargeCat: String(row[chargeCatKey] || 'R').trim(), // Default 'R'
+                    UnitPrice: finalUnitPrice,
+                    BenefitPlan: String(row[benefitPlanKey] || 'CS,SS,UC').trim(),
+                    BillGroup: String(row[billGroupKey] || '07').trim(), // Default '07'
+                    CsCode: String(row[csCodeKey] || '').trim(),
+                    ReimbPrice: reimbVal,
+                    UpdateFlag: String(row[updateFlagKey] || 'A').trim(), // Default 'A'
+                    UpdateBeg: String(row[updateBegKey] || '2020-01-01T00:00:00').trim(),
+                    UpdateEnd: String(row[updateEndKey] || '9999-12-31T23:59:59').trim(),
+                    RPDateBeg: String(row[rpDateBegKey] || '2018-01-01T00:00:00').trim(),
+                    RPDateEnd: String(row[rpDateEndKey] || '9999-12-31T23:59:59').trim(),
+                    DateUpd: String(row[dateUpdKey] || getCurrentDateTimeString()).trim()
+                };
+            });
+
+            // Automatically set defaults if empty
+            catalogData.forEach(item => {
+                if (!item.SFlag) item.SFlag = "R";
+                if (!item.ChargeCat) item.ChargeCat = "R";
+                if (!item.UpdateFlag) item.UpdateFlag = "A";
+                if (!item.UpdateBeg) item.UpdateBeg = "2020-01-01T00:00:00";
+                if (!item.UpdateEnd) item.UpdateEnd = "9999-12-31T23:59:59";
+                if (!item.RPDateBeg) item.RPDateBeg = "2018-01-01T00:00:00";
+                if (!item.RPDateEnd) item.RPDateEnd = "9999-12-31T23:59:59";
+                if (!item.DateUpd) item.DateUpd = getCurrentDateTimeString();
+            });
+
+            selectedRowIds.clear();
+            currentPage = 1;
+            
+            // Switch layout
+            dropZone.style.display = 'none';
+            dataSection.style.display = 'flex';
+            
+            applyFilterAndRender();
+        }
+
+        // Apply Search Filter, Error Filter, and Render Table & Stats
+        function applyFilterAndRender() {
+            // Count Stats
+            let total = catalogData.length;
+            let valid = 0;
+            let invalid = 0;
+
+            catalogData.forEach(item => {
+                if (validateRow(item)) {
+                    valid++;
+                } else {
+                    invalid++;
+                }
+            });
+
+            document.getElementById('stat-total').textContent = total;
+            document.getElementById('stat-valid').textContent = valid;
+            document.getElementById('stat-invalid').textContent = invalid;
+
+            // Apply Filters
+            filteredData = catalogData.filter(item => {
+                // Error filter
+                if (showOnlyErrors && validateRow(item)) {
+                    return false;
+                }
+
+                // Search Query
+                if (searchQuery) {
+                    const q = searchQuery.toLowerCase();
+                    return item.LCCode.toLowerCase().includes(q) || 
+                           item.TMLT.toLowerCase().includes(q) || 
+                           item.Name.toLowerCase().includes(q) ||
+                           item.LOINC.toLowerCase().includes(q) ||
+                           item.CsCode.toLowerCase().includes(q);
+                }
+
+                return true;
+            });
+
+            renderTable();
+            renderPagination();
+        }
+
+        // Validate individual row parameters
+        function validateRow(item) {
+            // Required parameters: LCCode, TMLT, Name, SFlag, ChargeCat, UnitPrice, BenefitPlan, BillGroup, UpdateFlag, UpdateBeg, UpdateEnd, RPDateBeg, RPDateEnd
+            if (!item.LCCode) return false;
+            if (!item.TMLT || item.TMLT.length < 5) return false;
+            if (!item.Name) return false;
+            if (!item.SFlag) return false;
+            if (!item.ChargeCat) return false;
+            if (item.UnitPrice === "" || isNaN(Number(item.UnitPrice))) return false;
+            if (!item.BenefitPlan) return false;
+            if (!item.BillGroup) return false;
+            if (!item.UpdateFlag) return false;
+            if (!item.UpdateBeg) return false;
+            if (!item.UpdateEnd) return false;
+            if (!item.RPDateBeg) return false;
+            if (!item.RPDateEnd) return false;
+            
+            return true;
+        }
+
+        // Render Current Page Table
+        function renderTable() {
+            catalogTbody.innerHTML = '';
+            
+            if (filteredData.length === 0) {
+                catalogTbody.innerHTML = `<tr><td colspan="20" style="text-align: center; padding: 2rem; color: var(--text-secondary);">ไม่พบข้อมูลสอดคล้องกับตัวกรอง</td></tr>`;
+                return;
+            }
+
+            const startIndex = (currentPage - 1) * rowsPerPage;
+            const endIndex = Math.min(startIndex + rowsPerPage, filteredData.length);
+            const pageData = filteredData.slice(startIndex, endIndex);
+
+            pageData.forEach(item => {
+                const tr = document.createElement('tr');
+                const isChecked = selectedRowIds.has(item.id);
+                const isValid = validateRow(item);
+                
+                if (!isValid) {
+                    tr.classList.add('has-error');
+                }
+
+                tr.innerHTML = `
+                    <td class="chk-col"><input type="checkbox" class="custom-checkbox row-select" data-id="${item.id}" ${isChecked ? 'checked' : ''}></td>
+                    <td><input type="text" class="cell-input ${!item.LCCode ? 'invalid' : ''}" value="${escapeHtml(item.LCCode)}" onchange="updateCell(${item.id}, 'LCCode', this.value)"></td>
+                    <td><input type="text" class="cell-input ${!item.BillGroup ? 'invalid' : ''}" value="${escapeHtml(item.BillGroup)}" onchange="updateCell(${item.id}, 'BillGroup', this.value)"></td>
+                    <td><input type="text" class="cell-input" value="${escapeHtml(item.CsCode)}" placeholder="ถ้ามี" onchange="updateCell(${item.id}, 'CsCode', this.value)"></td>
+                    <td><input type="text" class="cell-input ${(!item.TMLT || item.TMLT.length < 5) ? 'invalid' : ''}" value="${escapeHtml(item.TMLT)}" onchange="updateCell(${item.id}, 'TMLT', this.value)"></td>
+                    <td><input type="text" class="cell-input" value="${escapeHtml(item.LOINC)}" onchange="updateCell(${item.id}, 'LOINC', this.value)"></td>
+                    <td><input type="text" class="cell-input" value="${escapeHtml(item.Panel)}" onchange="updateCell(${item.id}, 'Panel', this.value)"></td>
+                    <td><input type="text" class="cell-input ${!item.Name ? 'invalid' : ''}" value="${escapeHtml(item.Name)}" onchange="updateCell(${item.id}, 'Name', this.value)"></td>
+                    <td><input type="text" class="cell-input ${!item.SFlag ? 'invalid' : ''}" value="${escapeHtml(item.SFlag)}" onchange="updateCell(${item.id}, 'SFlag', this.value)"></td>
+                    <td><input type="text" class="cell-input ${!item.ChargeCat ? 'invalid' : ''}" value="${escapeHtml(item.ChargeCat)}" onchange="updateCell(${item.id}, 'ChargeCat', this.value)"></td>
+                    <td><input type="text" class="cell-input ${(item.UnitPrice === '' || isNaN(Number(item.UnitPrice))) ? 'invalid' : ''}" value="${escapeHtml(item.UnitPrice)}" placeholder="0.00" onchange="updateCell(${item.id}, 'UnitPrice', this.value)"></td>
+                    <td><input type="text" class="cell-input ${!item.BenefitPlan ? 'invalid' : ''}" value="${escapeHtml(item.BenefitPlan)}" onchange="updateCell(${item.id}, 'BenefitPlan', this.value)"></td>
+                    <td><input type="text" class="cell-input" value="${escapeHtml(item.ReimbPrice)}" placeholder="ถ้ามี" onchange="updateCell(${item.id}, 'ReimbPrice', this.value)"></td>
+                    <td><input type="text" class="cell-input ${!item.UpdateFlag ? 'invalid' : ''}" value="${escapeHtml(item.UpdateFlag)}" placeholder="เช่น A" onchange="updateCell(${item.id}, 'UpdateFlag', this.value)"></td>
+                    <td><input type="text" class="cell-input ${!item.UpdateBeg ? 'invalid' : ''}" value="${escapeHtml(item.UpdateBeg)}" placeholder="YYYY-MM-DDTHH:mm:ss" onchange="updateCell(${item.id}, 'UpdateBeg', this.value)"></td>
+                    <td><input type="text" class="cell-input ${!item.UpdateEnd ? 'invalid' : ''}" value="${escapeHtml(item.UpdateEnd)}" placeholder="YYYY-MM-DDTHH:mm:ss" onchange="updateCell(${item.id}, 'UpdateEnd', this.value)"></td>
+                    <td><input type="text" class="cell-input ${!item.RPDateBeg ? 'invalid' : ''}" value="${escapeHtml(item.RPDateBeg)}" placeholder="YYYY-MM-DDTHH:mm:ss" onchange="updateCell(${item.id}, 'RPDateBeg', this.value)"></td>
+                    <td><input type="text" class="cell-input ${!item.RPDateEnd ? 'invalid' : ''}" value="${escapeHtml(item.RPDateEnd)}" placeholder="YYYY-MM-DDTHH:mm:ss" onchange="updateCell(${item.id}, 'RPDateEnd', this.value)"></td>
+                    <td><input type="text" class="cell-input" value="${escapeHtml(item.DateUpd)}" placeholder="YYYY-MM-DDTHH:mm:ss" onchange="updateCell(${item.id}, 'DateUpd', this.value)"></td>
+                    <td style="text-align: center;">
+                        <button class="btn btn-danger" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="deleteRow(${item.id})">ลบ</button>
+                    </td>
+                `;
+
+                // Add event listener to checkbox
+                const chk = tr.querySelector('.row-select');
+                chk.addEventListener('change', (e) => {
+                    if (e.target.checked) {
+                        selectedRowIds.add(item.id);
+                    } else {
+                        selectedRowIds.delete(item.id);
+                    }
+                    updateSelectAllState();
+                });
+
+                catalogTbody.appendChild(tr);
+            });
+
+            // Update Pagination Info Text
+            document.getElementById('pagination-info').textContent = 
+                `แสดงรายการ ${filteredData.length === 0 ? 0 : startIndex + 1} - ${endIndex} จากทั้งหมด ${filteredData.length} รายการ`;
+        }
+
+        // Helper to update cells in real time
+        function updateCell(id, key, val) {
+            const index = catalogData.findIndex(item => item.id === id);
+            if (index !== -1) {
+                catalogData[index][key] = val;
+                
+                const rowEl = document.querySelector(`.row-select[data-id="${id}"]`).closest('tr');
+                
+                // If user modified UpdateFlag, auto-fill/clear RPDateEnd
+                if (key === 'UpdateFlag') {
+                    const rpDateEndInput = rowEl.querySelector('input[onchange*="RPDateEnd"]');
+                    if (val === 'D') {
+                        catalogData[index]['RPDateEnd'] = getCurrentDateTimeString();
+                        if (rpDateEndInput) rpDateEndInput.value = catalogData[index]['RPDateEnd'];
+                    } else {
+                        catalogData[index]['RPDateEnd'] = "";
+                        if (rpDateEndInput) rpDateEndInput.value = "";
+                    }
+                }
+                
+                // Keep UI updated for validity but don't re-render entirely to preserve focus
+                const row = catalogData[index];
+                const isValid = validateRow(row);
+                
+                if (isValid) {
+                    rowEl.classList.remove('has-error');
+                } else {
+                    rowEl.classList.add('has-error');
+                }
+
+                // Update counts without fully re-rendering
+                updateStatsOnly();
+            }
+        }
+
+        function updateStatsOnly() {
+            let total = catalogData.length;
+            let valid = 0;
+            let invalid = 0;
+
+            catalogData.forEach(item => {
+                if (validateRow(item)) {
+                    valid++;
+                } else {
+                    invalid++;
+                }
+            });
+
+            document.getElementById('stat-total').textContent = total;
+            document.getElementById('stat-valid').textContent = valid;
+            document.getElementById('stat-invalid').textContent = invalid;
+        }
+
+        // Delete Row
+        function deleteRow(id) {
+            catalogData = catalogData.filter(item => item.id !== id);
+            selectedRowIds.delete(id);
+            applyFilterAndRender();
+            showToast('ลบรายการแล็บสำเร็จ', 'success');
+        }
+
+        // Escape HTML
+        function escapeHtml(str) {
+            if (typeof str !== 'string') return str;
+            return str
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        // Pagination rendering
+        function renderPagination() {
+            const controls = document.getElementById('pagination-controls');
+            controls.innerHTML = '';
+
+            const totalPages = Math.ceil(filteredData.length / rowsPerPage);
+            if (totalPages <= 1) return;
+
+            // Prev Button
+            const prevBtn = document.createElement('button');
+            prevBtn.className = 'page-btn';
+            prevBtn.textContent = '◀';
+            prevBtn.disabled = currentPage === 1;
+            prevBtn.addEventListener('click', () => {
+                if (currentPage > 1) {
+                    currentPage--;
+                    renderTable();
+                    renderPagination();
+                }
+            });
+            controls.appendChild(prevBtn);
+
+            // Page numbers
+            const maxVisible = 5;
+            let startPage = Math.max(1, currentPage - 2);
+            let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+
+            if (endPage - startPage < maxVisible - 1) {
+                startPage = Math.max(1, endPage - maxVisible + 1);
+            }
+
+            for (let i = startPage; i <= endPage; i++) {
+                const btn = document.createElement('button');
+                btn.className = `page-btn ${i === currentPage ? 'active' : ''}`;
+                btn.textContent = i;
+                btn.addEventListener('click', () => {
+                    currentPage = i;
+                    renderTable();
+                    renderPagination();
+                });
+                controls.appendChild(btn);
+            }
+
+            // Next Button
+            const nextBtn = document.createElement('button');
+            nextBtn.className = 'page-btn';
+            nextBtn.textContent = '▶';
+            nextBtn.disabled = currentPage === totalPages;
+            nextBtn.addEventListener('click', () => {
+                if (currentPage < totalPages) {
+                    currentPage++;
+                    renderTable();
+                    renderPagination();
+                }
+            });
+            controls.appendChild(nextBtn);
+        }
+
+        // Batch Apply
+        document.getElementById('btn-apply-batch').addEventListener('click', () => {
+            if (selectedRowIds.size === 0) {
+                showToast('กรุณาทำเครื่องหมายเลือกแถวที่ต้องการแก้ไขก่อน (Checkbox ด้านหน้าสุด)', 'warning');
+                return;
+            }
+
+            const benefitPlan = document.getElementById('batch-benefit').value;
+            const billGroup = document.getElementById('batch-billgroup').value;
+            const sFlag = document.getElementById('batch-sflag').value;
+            const chargeCat = document.getElementById('batch-chargecat').value;
+            const updateFlag = document.getElementById('batch-updateflag').value;
+            const updateBeg = document.getElementById('batch-updatebeg').value;
+            const updateEnd = document.getElementById('batch-updateend').value;
+            const rpDateBeg = document.getElementById('batch-rpdatebeg').value;
+            const rpDateEnd = document.getElementById('batch-rpdateend').value;
+
+            let updatedCount = 0;
+
+            catalogData.forEach(item => {
+                if (selectedRowIds.has(item.id)) {
+                    if (benefitPlan) item.BenefitPlan = benefitPlan;
+                    if (billGroup) item.BillGroup = billGroup;
+                    if (sFlag) item.SFlag = sFlag;
+                    if (chargeCat) item.ChargeCat = chargeCat;
+                    if (updateFlag) item.UpdateFlag = updateFlag;
+                    if (updateBeg) item.UpdateBeg = updateBeg;
+                    if (updateEnd) item.UpdateEnd = updateEnd;
+                    if (rpDateBeg) item.RPDateBeg = rpDateBeg;
+                    
+                    if (rpDateEnd) {
+                        item.RPDateEnd = rpDateEnd;
+                    } else if (updateFlag) {
+                        if (updateFlag === 'D') {
+                            item.RPDateEnd = getCurrentDateTimeString();
+                        } else {
+                            item.RPDateEnd = "";
+                        }
+                    } else {
+                        if (item.UpdateFlag !== 'D') {
+                            item.RPDateEnd = "";
+                        } else if (!item.RPDateEnd) {
+                            item.RPDateEnd = getCurrentDateTimeString();
+                        }
+                    }
+                    updatedCount++;
+                }
+            });
+
+            applyFilterAndRender();
+            showToast(`แก้ไขข้อมูลแบบกลุ่มสําเร็จจำนวน ${updatedCount} แถว`, 'success');
+        });
+
+        // Search Filter input listener
+        document.getElementById('table-search').addEventListener('input', (e) => {
+            searchQuery = e.target.value;
+            currentPage = 1;
+            applyFilterAndRender();
+        });
+
+        // Show All Filter button
+        document.getElementById('btn-show-all').addEventListener('click', () => {
+            showOnlyErrors = false;
+            currentPage = 1;
+            applyFilterAndRender();
+        });
+
+        // Show Errors filter button
+        document.getElementById('btn-show-errors').addEventListener('click', () => {
+            showOnlyErrors = true;
+            currentPage = 1;
+            applyFilterAndRender();
+        });
+
+        // Add New Row button
+        document.getElementById('btn-add-row').addEventListener('click', () => {
+            const newId = catalogData.length > 0 ? Math.max(...catalogData.map(o => o.id)) + 1 : 1;
+            
+            const newItem = {
+                id: newId,
+                LCCode: "",
+                TMLT: "",
+                LOINC: "",
+                Panel: "",
+                Name: "รายการแล็บใหม่",
+                SFlag: "R",
+                ChargeCat: "R",
+                UnitPrice: "",
+                BenefitPlan: "CS,SS,UC",
+                BillGroup: "07",
+                CsCode: "",
+                ReimbPrice: "",
+                UpdateFlag: "A",
+                UpdateBeg: "2020-01-01T00:00:00",
+                UpdateEnd: "9999-12-31T23:59:59",
+                RPDateBeg: "2018-01-01T00:00:00",
+                RPDateEnd: "9999-12-31T23:59:59",
+                DateUpd: getCurrentDateTimeString()
+            };
+
+            catalogData.unshift(newItem); // add to top
+            currentPage = 1;
+            applyFilterAndRender();
+            showToast('เพิ่มรายการแถวใหม่สำเร็จ', 'success');
+        });
+
+        // Clear All button
+        document.getElementById('btn-clear-all').addEventListener('click', () => {
+            if (confirm('คุณแน่ใจว่าต้องการล้างข้อมูลทั้งหมด? ข้อมูลปัจจุบันจะสูญหาย')) {
+                catalogData = [];
+                filteredData = [];
+                selectedRowIds.clear();
+                currentPage = 1;
+                
+                dropZone.style.display = 'block';
+                dataSection.style.display = 'none';
+                
+                // Clear search inputs
+                document.getElementById('table-search').value = "";
+                searchQuery = "";
+                showOnlyErrors = false;
+                
+                updateStatsOnly();
+                showToast('ล้างข้อมูลออกจากระบบแล้ว', 'warning');
+            }
+        });
+
+        // Toggle Select All Checkbox
+        selectAllRows.addEventListener('change', (e) => {
+            const isChecked = e.target.checked;
+            
+            // Apply selection to ALL filtered rows
+            filteredData.forEach(item => {
+                if (isChecked) {
+                    selectedRowIds.add(item.id);
+                } else {
+                    selectedRowIds.delete(item.id);
+                }
+            });
+
+            // Re-render table to display updated checkboxes
+            renderTable();
+        });
+
+        function updateSelectAllState() {
+            if (filteredData.length === 0) {
+                selectAllRows.checked = false;
+                return;
+            }
+
+            const allSelected = filteredData.every(item => selectedRowIds.has(item.id));
+            selectAllRows.checked = allSelected;
+        }
+
+        // Export data to standard Lab Catalog Excel file
+        document.getElementById('btn-export').addEventListener('click', () => {
+            if (catalogData.length === 0) {
+                showToast('ไม่มีข้อมูลสำหรับส่งออก', 'error');
+                return;
+            }
+
+            // Check if there are invalid rows
+            const invalidRows = catalogData.filter(item => !validateRow(item));
+            if (invalidRows.length > 0) {
+                if (!confirm(`คุณมีรายการแล็บที่ข้อมูลไม่ครบถ้วนทั้งหมด ${invalidRows.length} รายการ คุณต้องการส่งออกไฟล์ต่อหรือไม่?`)) {
+                    return;
+                }
+            }
+
+            toggleLoader(true, "กำลังจัดทำไฟล์ Excel สำหรับ Lab Catalog...");
+
+            setTimeout(() => {
+                try {
+                    // Current export timestamp
+                    const exportTimeStr = getCurrentDateTimeString();
+
+                    // Structure the final export array matching the 17 columns
+                    // Duplicate row per benefit plan in BenefitPlan list
+                    const exportData = [];
+                    catalogData.forEach(item => {
+                        // Split BenefitPlan by comma (e.g. "CS,SS,UC" -> ["CS", "SS", "UC"])
+                        const plans = String(item.BenefitPlan || '')
+                            .split(',')
+                            .map(p => p.trim())
+                            .filter(p => p !== '');
+
+                        // Fallback to one empty value if no benefit plan specified
+                        if (plans.length === 0) {
+                            plans.push('');
+                        }
+
+                        plans.forEach(plan => {
+                            exportData.push({
+                                'LCCode': item.LCCode,
+                                'BillGroup': item.BillGroup,
+                                'CsCode': item.CsCode,
+                                'TMLT': item.TMLT,
+                                'LOINC': item.LOINC,
+                                'Panel': item.Panel,
+                                'Name': item.Name,
+                                'SFlag': item.SFlag,
+                                'ChargeCat': item.ChargeCat,
+                                'UnitPrice': item.UnitPrice !== "" ? parseFloat(item.UnitPrice) : "",
+                                'BenefitPlan': plan,
+                                'ReimbPrice': item.ReimbPrice !== "" ? parseFloat(item.ReimbPrice) : "",
+                                'UpdateFlag': item.UpdateFlag,
+                                'UPDateBeg': item.UpdateBeg,
+                                'UPDateEnd': item.UpdateEnd,
+                                'RPDateBeg': item.RPDateBeg,
+                                'RPDateEnd': item.RPDateEnd,
+                                'DateUpd': exportTimeStr
+                            });
+                        });
+                    });
+
+                    // Create worksheet
+                    const worksheet = XLSX.utils.json_to_sheet(exportData);
+                    
+                    // Create workbook
+                    const workbook = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(workbook, worksheet, "Lab Catalog");
+
+                    // Set headers row bold and style (standard sheet layout)
+                    // Get HCode and Sequence from input fields
+                    const hcode = document.getElementById('export-hcode').value.trim() || '10956';
+                    const seq = document.getElementById('export-seq').value.trim() || '0070';
+                    const fileName = `${hcode}_labcat_${seq}.xls`;
+
+                    // Write workbook in Excel 97-2003 (.xls) format using BIFF8 bookType
+                    XLSX.writeFile(workbook, fileName, { bookType: 'biff8' });
+                    
+                    showToast('ส่งออกไฟล์ Excel 97-2003 (.xls) สำเร็จ!', 'success');
+                } catch (error) {
+                    console.error(error);
+                    showToast(`เกิดข้อผิดพลาดในการสร้างไฟล์: ${error.message}`, 'error');
+                } finally {
+                    toggleLoader(false);
+                }
+            }, 500);
+        });
+
+    </script>
+</body>
+</html>

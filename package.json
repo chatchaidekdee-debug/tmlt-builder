@@ -1,0 +1,19 @@
+{
+  "name": "tmlt-lab-catalog-builder",
+  "version": "1.0.0",
+  "description": "TMLT to Lab Catalog Builder & Editor Desktop App",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "build:win": "node ./node_modules/pkg/lib-es5/bin.js . --targets node18-win-x64 --no-bytecode --output dist/tmlt_lab_catalog_builder.exe"
+  },
+  "bin": "server.js",
+  "pkg": {
+    "assets": [
+      "www/**/*"
+    ]
+  },
+  "devDependencies": {
+    "pkg": "^5.8.1"
+  }
+}
